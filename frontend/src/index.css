@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Markdown content rendered inside report cards. Tailwind's
+ * ``prose`` classes would suit, but pulling in @tailwindcss/typography
+ * just for this is heavy-handed; the rules below cover the cases the
+ * agents actually emit (h1-h3, lists, tables, code, inline emphasis).
+ */
+@layer components {
+  .markdown {
+    @apply text-gold-900 leading-relaxed;
+  }
+  .markdown h1 {
+    @apply text-2xl font-bold mt-6 mb-3 text-gold-800;
+  }
+  .markdown h2 {
+    @apply text-xl font-bold mt-5 mb-2 text-gold-800;
+  }
+  .markdown h3 {
+    @apply text-lg font-semibold mt-4 mb-2 text-gold-700;
+  }
+  .markdown p {
+    @apply my-3;
+  }
+  .markdown ul {
+    @apply list-disc pl-6 my-3 space-y-1;
+  }
+  .markdown ol {
+    @apply list-decimal pl-6 my-3 space-y-1;
+  }
+  .markdown a {
+    @apply text-gold-700 underline hover:text-gold-900;
+  }
+  .markdown code {
+    @apply bg-gold-100 px-1.5 py-0.5 rounded text-sm font-mono;
+  }
+  .markdown pre {
+    @apply bg-gold-900 text-gold-100 p-3 rounded-lg overflow-x-auto my-3 text-sm;
+  }
+  .markdown pre code {
+    @apply bg-transparent text-inherit p-0;
+  }
+  .markdown table {
+    @apply w-full border-collapse my-4 text-sm;
+  }
+  .markdown th, .markdown td {
+    @apply border border-gold-200 px-3 py-2 text-left;
+  }
+  .markdown th {
+    @apply bg-gold-100 font-semibold;
+  }
+  .markdown blockquote {
+    @apply border-l-4 border-gold-300 pl-4 italic my-3 text-gold-700;
+  }
+  .markdown hr {
+    @apply my-6 border-gold-200;
+  }
+  .markdown strong {
+    @apply font-semibold;
+  }
+}

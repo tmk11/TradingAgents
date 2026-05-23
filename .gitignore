@@ -217,3 +217,15 @@ __marimo__/
 
 # Cache
 **/data_cache/
+
+
+# Web frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.log
+
+# Web backend storage (per-user, must not be committed)
+.tradingagents/web/
+
+frontend/*.tsbuildinfo

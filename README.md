@@ -360,3 +360,75 @@ Please reference our work if you find *TradingAgents* provides you with some hel
       url={https://arxiv.org/abs/2412.20138}, 
 }
 ```
+
+
+
+## Web UI (Gold Edition)
+
+A small browser dashboard ships in this fork so analyses can be
+launched, browsed, and deleted without going through the CLI. Runs
+execute in a background worker thread on the FastAPI server and
+persist as JSON files under `~/.tradingagents/web/analyses/`, so a
+restart never loses history.
+
+### Architecture
+
+- **Backend** — `server/` (FastAPI). Three layers: `storage.py`
+  (atomic JSON writes), `runner.py` (single-worker thread that drives
+  `TradingAgentsGraph.propagate` and updates progress per LangGraph
+  node), `api.py` (REST surface + SPA static mount). Per-user data
+  goes to `~/.tradingagents/web/analyses/<uuid>.json`.
+- **Frontend** — `frontend/` (React 18 + Vite + Tailwind). Three
+  routes: `/` (list with status badges + per-row progress bar), `/new`
+  (form with gold-ticker presets, date picker, language selector),
+  `/analyses/:id` (full report viewer with tabbed markdown — Final
+  decision, Trader, Research plan, per-analyst reports, debate
+  histories — and a Danger zone for deletion).
+- **Polling** — list and detail pages auto-refresh every 3 s while a
+  run is `pending` or `running`, then idle when all are terminal.
+
+### Running
+
+```bash
+# Install Python deps
+pip install -e .                    # pulls fastapi + uvicorn via setup
+# (or, just for the server: pip install fastapi uvicorn)
+
+# Build the React bundle once (FastAPI then serves it on the same origin)
+cd frontend && npm install && npm run build && cd ..
+
+# Start the server
+python -m server                    # listens on http://127.0.0.1:8765
+
+# Open http://127.0.0.1:8765/
+```
+
+For frontend hacking, run Vite separately so changes hot-reload:
+
+```bash
+# terminal 1: backend (port 8765)
+python -m server
+
+# terminal 2: Vite dev server (port 5173, proxies /api to 8765)
+cd frontend && npm run dev
+
+# Open http://localhost:5173/
+```
+
+### REST API
+
+All endpoints under `/api`. Browse the auto-generated OpenAPI docs at
+`http://127.0.0.1:8765/docs` once the server is running.
+
+| Method   | Path                          | Purpose                              |
+| -------- | ----------------------------- | ------------------------------------ |
+| `GET`    | `/api/health`                 | Liveness probe.                      |
+| `GET`    | `/api/analyses`               | List analyses (newest first, summary).|
+| `POST`   | `/api/analyses`               | Queue a new analysis. Body: `{ticker, analysis_date, language?}`. Returns immediately with `status: pending`. |
+| `GET`    | `/api/analyses/{id}`          | Full record including reports.        |
+| `DELETE` | `/api/analyses/{id}`          | Remove an analysis from disk.         |
+
+Asset type is auto-detected from the ticker (gold complex →
+`commodity`, `*-USD` etc. → `crypto`, otherwise `stock`) and drives
+the same analyst-selection logic as the CLI — Fundamentals Analyst is
+auto-disabled for crypto and commodity runs.
