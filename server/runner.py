@@ -126,6 +126,17 @@ class AnalysisRunner:
         if record.get("language"):
             config["output_language"] = record["language"]
 
+        # Per-record debate-round overrides. Older records on disk
+        # may not have these fields — fall back to whatever the
+        # global config defaults to (1 each, unless the operator set
+        # the TRADINGAGENTS_MAX_*_ROUNDS env vars).
+        if record.get("max_debate_rounds"):
+            config["max_debate_rounds"] = int(record["max_debate_rounds"])
+        if record.get("max_risk_discuss_rounds"):
+            config["max_risk_discuss_rounds"] = int(
+                record["max_risk_discuss_rounds"]
+            )
+
         # Equity runs include fundamentals; everything else (crypto,
         # commodity) drops it because there's no real fundamentals
         # data and the prompts mislead the LLM.

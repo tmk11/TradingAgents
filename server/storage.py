@@ -65,6 +65,12 @@ class AnalysisRecord:
     error: Optional[str]
     created_at: str
     completed_at: Optional[str]
+    # How many rounds the two debate stages should run. Mirror the
+    # CLI's ``research_depth`` knob — 1 = quick, 3 = medium, 5 = deep.
+    # Stored per-record so re-running an old analysis always uses the
+    # same depth the user originally picked.
+    max_debate_rounds: int = 1
+    max_risk_discuss_rounds: int = 1
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "AnalysisRecord":
@@ -81,6 +87,10 @@ class AnalysisRecord:
             error=data.get("error"),
             created_at=data["created_at"],
             completed_at=data.get("completed_at"),
+            max_debate_rounds=int(data.get("max_debate_rounds", 1) or 1),
+            max_risk_discuss_rounds=int(
+                data.get("max_risk_discuss_rounds", 1) or 1
+            ),
         )
 
 
@@ -106,6 +116,8 @@ class AnalysisStore:
         asset_type: str,
         analysis_date: str,
         language: str = "English",
+        max_debate_rounds: int = 1,
+        max_risk_discuss_rounds: int = 1,
     ) -> Dict[str, Any]:
         """Create a new ``pending`` analysis and persist it.
 
@@ -126,6 +138,8 @@ class AnalysisStore:
             "error": None,
             "created_at": _utcnow_iso(),
             "completed_at": None,
+            "max_debate_rounds": int(max_debate_rounds),
+            "max_risk_discuss_rounds": int(max_risk_discuss_rounds),
         }
         with self._lock:
             self._write(record)

@@ -108,6 +108,21 @@ function Header({ a }: { a: AnalysisDetail }) {
             <span className="capitalize">{a.asset_type}</span> · analysis date{' '}
             <span className="font-mono">{a.analysis_date}</span> ·{' '}
             language <span className="font-medium">{a.language}</span>
+            {(a.max_debate_rounds || a.max_risk_discuss_rounds) && (
+              <>
+                {' '}
+                · debate{' '}
+                <span className="font-mono">
+                  {a.max_debate_rounds ?? 1}/{a.max_risk_discuss_rounds ?? 1}
+                </span>{' '}
+                <span
+                  className="text-gold-500"
+                  title="Bull-Bear rounds / Risk-debate rounds"
+                >
+                  rounds
+                </span>
+              </>
+            )}
           </div>
         </div>
         <div className="text-xs text-gold-500 text-right">

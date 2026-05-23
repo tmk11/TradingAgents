@@ -38,6 +38,10 @@ export interface AnalysisSummary {
   error: string | null
   created_at: string
   completed_at: string | null
+  // Per-analysis debate-round configuration. Optional because old
+  // records persisted before the feature shipped don't have them.
+  max_debate_rounds?: number | null
+  max_risk_discuss_rounds?: number | null
 }
 
 export interface InvestmentDebateState {
@@ -79,4 +83,8 @@ export interface CreateAnalysisRequest {
   ticker: string
   analysis_date: string
   language?: string
+  /** Bull/Bear debate rounds. Server clamps to 1-10; default 1. */
+  max_debate_rounds?: number
+  /** Aggressive/Conservative/Neutral risk-debate rounds. 1-10; default 1. */
+  max_risk_discuss_rounds?: number
 }

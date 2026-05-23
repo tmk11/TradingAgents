@@ -79,6 +79,26 @@ class CreateAnalysisRequest(BaseModel):
         description="YYYY-MM-DD analysis date (must not be in the future).",
     )
     language: str = Field(default="English", min_length=2, max_length=32)
+    max_debate_rounds: int = Field(
+        default=1,
+        ge=1,
+        le=10,
+        description=(
+            "Number of Bull/Bear back-and-forth rounds. The graph "
+            "stops the investment debate when the speaker count "
+            "reaches ``2 * max_debate_rounds``."
+        ),
+    )
+    max_risk_discuss_rounds: int = Field(
+        default=1,
+        ge=1,
+        le=10,
+        description=(
+            "Number of Aggressive/Conservative/Neutral risk-debate "
+            "rounds. The graph stops the risk debate when the "
+            "speaker count reaches ``3 * max_risk_discuss_rounds``."
+        ),
+    )
 
     @field_validator("ticker")
     @classmethod
@@ -115,6 +135,11 @@ class AnalysisSummary(BaseModel):
     error: Optional[str]
     created_at: str
     completed_at: Optional[str]
+    # Optional so analyses created before this field existed (older
+    # JSON files on disk) still validate. New records always have
+    # both fields populated by ``AnalysisStore.create``.
+    max_debate_rounds: Optional[int] = None
+    max_risk_discuss_rounds: Optional[int] = None
 
 
 class AnalysisDetail(AnalysisSummary):
@@ -216,6 +241,8 @@ def create_app(
             asset_type=detect_asset_type(req.ticker),
             analysis_date=req.analysis_date,
             language=req.language,
+            max_debate_rounds=req.max_debate_rounds,
+            max_risk_discuss_rounds=req.max_risk_discuss_rounds,
         )
         r.submit(record["id"])
         # Drop ``reports`` to match AnalysisSummary shape.
