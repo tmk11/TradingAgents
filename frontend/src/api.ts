@@ -7,7 +7,10 @@ import type {
   AnalysisOutcome,
   AnalysisSummary,
   CreateAnalysisRequest,
+  CreateScheduleRequest,
+  Schedule,
   TrackRecord,
+  UpdateScheduleRequest,
 } from './types'
 
 const BASE = '/api'
@@ -67,4 +70,33 @@ export const api = {
     request<AnalysisOutcome>(`/analyses/${id}/outcome`),
 
   trackRecord: () => request<TrackRecord>('/track-record'),
+
+  // ---- Schedules ---------------------------------------------------
+
+  listSchedules: () => request<Schedule[]>('/schedules'),
+
+  createSchedule: (payload: CreateScheduleRequest) =>
+    request<Schedule>('/schedules', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateSchedule: (id: string, patch: UpdateScheduleRequest) =>
+    request<Schedule>(`/schedules/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+
+  deleteSchedule: (id: string) =>
+    request<void>(`/schedules/${id}`, { method: 'DELETE' }),
+
+  runScheduleNow: (id: string) =>
+    request<AnalysisSummary>(`/schedules/${id}/run-now`, { method: 'POST' }),
+
+  seedRecommendedSchedules: (ticker = 'GLD', language = 'English') => {
+    const qs = new URLSearchParams({ ticker, language }).toString()
+    return request<Schedule[]>(`/schedules/seed-recommended?${qs}`, {
+      method: 'POST',
+    })
+  },
 }

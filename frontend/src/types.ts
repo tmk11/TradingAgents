@@ -134,3 +134,60 @@ export interface CreateAnalysisRequest {
   /** Aggressive/Conservative/Neutral risk-debate rounds. 1-10; default 1. */
   max_risk_discuss_rounds?: number
 }
+
+// ---------------------------------------------------------------------------
+// Schedules — auto-fire analyses on a cadence
+// ---------------------------------------------------------------------------
+
+export type ScheduleKind = 'daily_after_close' | 'volatility_trigger'
+
+/** Params block — shape varies by kind, kept as a loose record so
+ * the form UI can pass through whatever the user typed. The backend
+ * clamps + validates on every read. */
+export interface ScheduleParams {
+  // daily_after_close
+  fire_hour_utc?: number
+  fire_minute_utc?: number
+  weekdays_only?: boolean
+  // volatility_trigger
+  threshold_pct?: number
+  throttle_hours?: number
+  check_interval_minutes?: number
+}
+
+export interface Schedule {
+  id: string
+  name: string
+  ticker: string
+  asset_type: AssetType
+  kind: ScheduleKind
+  params: ScheduleParams
+  language: string
+  max_debate_rounds: number
+  max_risk_discuss_rounds: number
+  enabled: boolean
+  last_run_at: string | null
+  last_run_analysis_id: string | null
+  last_check_at: string | null
+  created_at: string
+}
+
+export interface CreateScheduleRequest {
+  ticker: string
+  kind: ScheduleKind
+  name?: string
+  language?: string
+  max_debate_rounds?: number
+  max_risk_discuss_rounds?: number
+  params?: ScheduleParams
+  enabled?: boolean
+}
+
+export interface UpdateScheduleRequest {
+  name?: string
+  enabled?: boolean
+  language?: string
+  max_debate_rounds?: number
+  max_risk_discuss_rounds?: number
+  params?: ScheduleParams
+}
