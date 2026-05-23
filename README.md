@@ -61,7 +61,7 @@ gold complex. High-level adjustments:
   risk, breakeven inflation, ETF flows, EM physical demand).
 - **Gold-native news sources added.** A new `get_gold_news` tool is
   bound to the News Analyst only when `asset_type == "commodity"`.
-  It queries three RSS feeds in parallel and combines them into a
+  It queries four RSS feeds in parallel and combines them into a
   single attributed prompt block:
   - **Mining.com** — industry trade press; relevant for miner ETFs
     (GDX/GDXJ) and supply-side context (production, M&A,
@@ -70,11 +70,31 @@ gold complex. High-level adjustments:
     geopolitical-driver headlines.
   - **Investing.com Economy** — Fed / CPI / real-yield coverage,
     the macro inputs that determine real rates.
+  - **Bloomberg Markets** — institutional macro & cross-asset
+    headlines that frame the inflation / Fed / risk-off regime.
   
   The feed registry lives in `tradingagents/dataflows/gold_news.py`
   (`GOLD_FEEDS`); append a `GoldNewsFeed(label, url)` to add more.
   All fetchers degrade gracefully — a dead feed produces a clearly
   labelled placeholder rather than an exception.
+- **Gold-driver macro data tool added.** A new `get_macro_data` tool
+  is bound to the Market Analyst only when `asset_type ==
+  "commodity"`. It returns a single block summarising the canonical
+  gold drivers — latest value, 1d/1w/1m % change, and window min/max
+  for each series — across two providers:
+  - **yfinance (always loads):** `^TNX` 10Y nominal Treasury yield,
+    `DX-Y.NYB` DXY US dollar index, `^VIX` volatility index, `TIP`
+    TIPS ETF (real-yield proxy), `GC=F` gold futures.
+  - **FRED public CSV (best-effort, no API key):** `DFII10` 10Y
+    real yield (THE single most important gold driver), `T10YIE`
+    10Y breakeven inflation, `WALCL` Fed total assets (QE/QT
+    regime), `DTWEXBGS` broad trade-weighted USD.
+  
+  FRED unreachability degrades to labelled placeholders so the
+  yfinance path always carries the floor. The series registry lives
+  in `tradingagents/dataflows/macro_data.py` (`MACRO_SERIES_GOLD`);
+  append a `MacroSeries(provider, series_id, label, description)`
+  to add more.
 - **Sentiment analyst widens reach for gold.** When the asset type is
   `commodity`, the analyst queries r/Gold, r/Wallstreetsilver,
   r/preciousmetals, and r/SilverBugs instead of the default finance

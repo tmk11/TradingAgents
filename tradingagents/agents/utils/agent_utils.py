@@ -19,6 +19,9 @@ from tradingagents.agents.utils.news_data_tools import (
     get_global_news,
     get_gold_news,
 )
+from tradingagents.agents.utils.macro_data_tools import (
+    get_macro_data,
+)
 
 
 def get_language_instruction() -> str:

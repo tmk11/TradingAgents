@@ -89,6 +89,10 @@ GOLD_FEEDS: List[GoldNewsFeed] = [
         label="Investing.com Economy (Fed, CPI, real yields, central banks)",
         url="https://www.investing.com/rss/news_14.rss",
     ),
+    GoldNewsFeed(
+        label="Bloomberg Markets (institutional macro & cross-asset)",
+        url="https://feeds.bloomberg.com/markets/news.rss",
+    ),
 ]
 
 
