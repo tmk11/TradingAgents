@@ -12,7 +12,10 @@ from tradingagents.llm_clients.model_catalog import get_model_options
 
 console = Console()
 
-TICKER_INPUT_EXAMPLES = "Examples: SPY, CNC.TO, 7203.T, 0700.HK"
+# Gold Edition: examples skewed toward gold instruments. Stock/crypto are
+# still accepted (the framework keeps that asset_type plumbing intact),
+# but the surface here advertises gold first.
+TICKER_INPUT_EXAMPLES = "Examples: GLD, IAU, GC=F, XAUUSD=X, GDX, SGOL"
 
 ANALYST_ORDER = [
     ("Market Analyst", AnalystType.MARKET),
@@ -22,6 +25,24 @@ ANALYST_ORDER = [
 ]
 
 CRYPTO_SUFFIXES = ("-USD", "-USDT", "-USDC", "-BTC", "-ETH")
+
+# Tickers that the Gold Edition treats as the "gold complex" and analyses
+# as a commodity rather than a company. Covers:
+#   - COMEX gold futures (GC=F front-month, MGC=F micro)
+#   - Spot pairs surfaced by yfinance (XAUUSD=X, XAU=X)
+#   - Major physical-backed ETFs (GLD, IAU, SGOL, BAR, AAAU, GLDM, OUNZ)
+#   - Senior + junior gold-miner ETFs (GDX, GDXJ, RING, NUGT, JNUG)
+#   - The PHLX Gold/Silver mining index (^XAU)
+# Match is case-insensitive on input. To extend the asset universe (e.g.
+# silver: SLV, SI=F), append to this tuple — detect_asset_type and
+# filter_analysts_for_asset_type pick it up automatically.
+GOLD_TICKERS = (
+    "GC=F", "MGC=F",
+    "XAUUSD=X", "XAU=X",
+    "GLD", "IAU", "SGOL", "BAR", "AAAU", "GLDM", "OUNZ",
+    "GDX", "GDXJ", "RING", "NUGT", "JNUG",
+    "^XAU",
+)
 
 
 def get_ticker() -> str:
@@ -51,6 +72,11 @@ def normalize_ticker_symbol(ticker: str) -> str:
 
 def detect_asset_type(ticker: str) -> AssetType:
     normalized_ticker = ticker.strip().upper()
+    # Gold is checked first because some gold tickers (e.g. ``GLD``) would
+    # otherwise fall through to STOCK, which would surface the Fundamentals
+    # Analyst — wrong for a commodity.
+    if normalized_ticker in GOLD_TICKERS:
+        return AssetType.COMMODITY
     if normalized_ticker.endswith(CRYPTO_SUFFIXES):
         return AssetType.CRYPTO
     return AssetType.STOCK
@@ -59,13 +85,17 @@ def detect_asset_type(ticker: str) -> AssetType:
 def filter_analysts_for_asset_type(
     analysts: List[AnalystType], asset_type: AssetType
 ) -> List[AnalystType]:
-    if asset_type != AssetType.CRYPTO:
-        return analysts
-    return [
-        analyst
-        for analyst in analysts
-        if analyst != AnalystType.FUNDAMENTALS
-    ]
+    # Both crypto and commodity are non-equity instruments without
+    # company-style fundamentals (earnings, balance sheet, cash flow),
+    # so the Fundamentals Analyst is dropped automatically — its tools
+    # would return mostly ``None`` and burn tokens for no signal.
+    if asset_type in (AssetType.CRYPTO, AssetType.COMMODITY):
+        return [
+            analyst
+            for analyst in analysts
+            if analyst != AnalystType.FUNDAMENTALS
+        ]
+    return analysts
 
 
 def get_analysis_date() -> str:

@@ -27,12 +27,28 @@ from tradingagents.agents.utils.agent_utils import (
     get_language_instruction,
     get_news,
 )
-from tradingagents.dataflows.reddit import fetch_reddit_posts
+from tradingagents.dataflows.config import get_config
+from tradingagents.dataflows.reddit import DEFAULT_SUBREDDITS, fetch_reddit_posts
 from tradingagents.dataflows.stocktwits import fetch_stocktwits_messages
 
 
 def _seven_days_back(trade_date: str) -> str:
     return (datetime.strptime(trade_date, "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
+
+
+def _resolve_subreddits(asset_type: str) -> tuple[str, ...]:
+    """Pick the subreddit set to query based on asset type.
+
+    For commodity (gold complex), the default finance subs (wsb / stocks
+    / investing) rarely surface the macro/physical-premium discussion
+    that drives bullion sentiment, so swap in the precious-metals
+    communities. Operators can override the list at runtime via the
+    ``commodity_subreddits`` config key (see default_config.py).
+    """
+    if asset_type != "commodity":
+        return DEFAULT_SUBREDDITS
+    cfg = get_config().get("commodity_subreddits") or []
+    return tuple(cfg) if cfg else DEFAULT_SUBREDDITS
 
 
 def create_sentiment_analyst(llm):
@@ -47,14 +63,18 @@ def create_sentiment_analyst(llm):
         ticker = state["company_of_interest"]
         end_date = state["trade_date"]
         start_date = _seven_days_back(end_date)
-        instrument_context = build_instrument_context(ticker)
+        asset_type = state.get("asset_type", "stock")
+        instrument_context = build_instrument_context(ticker, asset_type)
 
         # Pre-fetch all three sources. Each fetcher degrades gracefully and
         # returns a string (no exceptions surface from here), so the LLM
         # always sees something — either real data or a clear placeholder.
         news_block = get_news.func(ticker, start_date, end_date)
         stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
-        reddit_block = fetch_reddit_posts(ticker)
+        # Reddit subs depend on asset_type — finance subs for stocks/crypto,
+        # precious-metals subs for gold (overridable via config).
+        subreddits = _resolve_subreddits(asset_type)
+        reddit_block = fetch_reddit_posts(ticker, subreddits=subreddits)
 
         system_message = _build_system_message(
             ticker=ticker,
@@ -63,6 +83,7 @@ def create_sentiment_analyst(llm):
             news_block=news_block,
             stocktwits_block=stocktwits_block,
             reddit_block=reddit_block,
+            subreddits=subreddits,
         )
 
         prompt = ChatPromptTemplate.from_messages(
@@ -104,8 +125,10 @@ def _build_system_message(
     news_block: str,
     stocktwits_block: str,
     reddit_block: str,
+    subreddits: tuple[str, ...] = DEFAULT_SUBREDDITS,
 ) -> str:
     """Assemble the sentiment-analyst system message with structured data blocks."""
+    subreddit_list = ", ".join(f"r/{s}" for s in subreddits)
     return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on three complementary data sources that have already been collected for you.
 
 ## Data sources (pre-fetched, in this prompt)
@@ -124,8 +147,8 @@ Fast-moving signal. Each message carries a user-labeled sentiment tag (Bullish /
 {stocktwits_block}
 <end_of_stocktwits>
 
-### Reddit posts — r/wallstreetbets, r/stocks, r/investing (past 7 days)
-Community discussion. Engagement signal via upvote score and comment count. Subreddit character matters (r/wallstreetbets is often contrarian/exuberant; r/stocks more measured; r/investing longer-term).
+### Reddit posts — {subreddit_list} (past 7 days)
+Community discussion. Engagement signal via upvote score and comment count. Subreddit character matters — adjust your weight accordingly (e.g. r/wallstreetbets is often contrarian/exuberant, r/stocks more measured, r/Gold and r/preciousmetals lean perma-bullish on bullion and emphasise physical premiums and central-bank flows).
 
 <start_of_reddit>
 {reddit_block}

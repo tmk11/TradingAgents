@@ -12,7 +12,15 @@ def create_news_analyst(llm):
     def news_analyst_node(state):
         current_date = state["trade_date"]
         asset_type = state.get("asset_type", "stock")
-        asset_label = "company" if asset_type == "stock" else "asset"
+        # Wording adapts to asset class: stocks have company-specific news,
+        # commodities (gold) lean on macro headlines, crypto sits in
+        # between.
+        if asset_type == "stock":
+            asset_label = "company"
+        elif asset_type == "commodity":
+            asset_label = "commodity / gold-complex"
+        else:
+            asset_label = "asset"
         instrument_context = build_instrument_context(
             state["company_of_interest"], asset_type
         )
@@ -22,8 +30,26 @@ def create_news_analyst(llm):
             get_global_news,
         ]
 
+        gold_focus_addendum = (
+            ""
+            if asset_type != "commodity"
+            else (
+                " Because the instrument is part of the gold complex, weight"
+                " global macro news heavily: Federal Reserve and major"
+                " central-bank policy moves, real-yield direction (10Y TIPS,"
+                " 5y5y forwards), DXY / US dollar momentum, central-bank"
+                " gold purchases and reserve diversification, geopolitical"
+                " risk premia (war, sanctions, trade conflict), inflation"
+                " surprises, and physical demand from China and India."
+                " Ticker-specific news is typically thin for futures and"
+                " spot pairs — supplement with global news so the report"
+                " reflects the actual price drivers."
+            )
+        )
+
         system_message = (
             f"You are a news researcher tasked with analyzing recent news and trends over the past week. Please write a comprehensive report of the current state of the world that is relevant for trading and macroeconomics. Use the available tools: get_news(query, start_date, end_date) for {asset_label}-specific or targeted news searches, and get_global_news(curr_date, look_back_days, limit) for broader macroeconomic news. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."
+            + gold_focus_addendum
             + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
             + get_language_instruction()
         )

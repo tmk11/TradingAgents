@@ -37,7 +37,7 @@ console = Console()
 
 app = typer.Typer(
     name="TradingAgents",
-    help="TradingAgents CLI: Multi-Agents LLM Financial Trading Framework",
+    help="TradingAgents CLI (Gold Edition): Multi-Agents LLM framework specialised for gold-complex analysis",
     add_completion=True,  # Enable shell completion
 )
 
@@ -482,8 +482,8 @@ def get_user_selections():
         welcome_content,
         border_style="green",
         padding=(1, 2),
-        title="Welcome to TradingAgents",
-        subtitle="Multi-Agents LLM Financial Trading Framework",
+        title="Welcome to TradingAgents (Gold Edition)",
+        subtitle="Multi-Agents LLM framework specialised for gold-complex analysis",
     )
     console.print(Align.center(welcome_box))
     console.print()
@@ -502,11 +502,14 @@ def get_user_selections():
         return Panel(box_content, border_style="blue", padding=(1, 2))
 
     # Step 1: Ticker symbol
+    # Gold Edition: surface gold-complex tickers as the primary examples.
+    # The framework still accepts equities and crypto pairs (asset_type
+    # is auto-detected), but the wording steers users toward gold.
     console.print(
         create_question_box(
             "Step 1: Ticker Symbol",
-            "Enter the exact ticker symbol to analyze, including exchange suffix when needed (examples: SPY, CNC.TO, 7203.T, 0700.HK)",
-            "SPY",
+            "Enter the exact ticker symbol to analyze. Gold examples: GLD, IAU, GC=F (futures), XAUUSD=X (spot), GDX (miners). Stock/crypto tickers are still supported.",
+            "GLD",
         )
     )
     selected_ticker = get_ticker()

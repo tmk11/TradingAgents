@@ -83,12 +83,22 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "global_news_lookback_days": 7,       # macro news lookback window
     # Search queries used by get_global_news for macro headlines. Extend or
     # replace to broaden geographic / sector coverage.
+    #
+    # Gold Edition: queries are tilted toward the price drivers that
+    # actually move bullion — Fed policy & real yields, USD strength,
+    # central-bank reserve diversification, ETF flows, geopolitical
+    # risk, inflation expectations, and physical demand from China &
+    # India. Generic equity-market queries (S&P earnings, GDP growth)
+    # have been removed; they crowded out gold-relevant signal in the
+    # 10-article context window.
     "global_news_queries": [
-        "Federal Reserve interest rates inflation",
-        "S&P 500 earnings GDP economic outlook",
-        "geopolitical risk trade war sanctions",
-        "ECB Bank of England BOJ central bank policy",
-        "oil commodities supply chain energy",
+        "Federal Reserve interest rate decision real yields TIPS",
+        "US dollar DXY index strength",
+        "central bank gold purchases World Gold Council reserves",
+        "geopolitical risk war sanctions Middle East Ukraine",
+        "inflation CPI breakeven 5y5y forward expectations",
+        "gold ETF flows GLD IAU holdings",
+        "China India physical gold demand jewelry",
     ],
     # Data vendor configuration
     # Category-level configuration (default for all tools in category)
@@ -108,6 +118,13 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # based on the ticker's exchange suffix. SPY remains the US default
     # so the reflection label keeps reading "Alpha vs SPY" for US tickers
     # while non-US tickers get their regional index automatically.
+    #
+    # Gold Edition note: when running gold tickers it is often useful to
+    # benchmark against GLD instead of SPY (alpha vs gold ETF surfaces
+    # whether the chosen vehicle — futures, miner, foreign-listed ETF —
+    # is over- or under-performing the bullion price itself). Override
+    # via ``TRADINGAGENTS_BENCHMARK_TICKER=GLD`` or by setting it on the
+    # config dict before constructing TradingAgentsGraph.
     "benchmark_ticker": None,
     "benchmark_map": {
         ".NS":  "^NSEI",    # NSE India (Nifty 50)
@@ -119,4 +136,16 @@ DEFAULT_CONFIG = _apply_env_overrides({
         ".AX":  "^AXJO",    # Australia (ASX 200)
         "":     "SPY",      # default for US-listed tickers (no suffix)
     },
+    # Gold Edition: subreddits queried by the Sentiment Analyst when the
+    # asset_type is ``commodity``. The default finance subs (wsb / stocks
+    # / investing) rarely produce gold-specific signal; the precious-
+    # metals communities below mention macro drivers and physical
+    # premiums that matter for the bullion thesis. Override per-run via
+    # the ``commodity_subreddits`` config key.
+    "commodity_subreddits": [
+        "Gold",
+        "Wallstreetsilver",
+        "preciousmetals",
+        "SilverBugs",
+    ],
 })
