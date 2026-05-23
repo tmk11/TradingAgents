@@ -4,8 +4,10 @@
 
 import type {
   AnalysisDetail,
+  AnalysisOutcome,
   AnalysisSummary,
   CreateAnalysisRequest,
+  TrackRecord,
 } from './types'
 
 const BASE = '/api'
@@ -60,4 +62,9 @@ export const api = {
 
   remove: (id: string) =>
     request<void>(`/analyses/${id}`, { method: 'DELETE' }),
+
+  outcome: (id: string) =>
+    request<AnalysisOutcome>(`/analyses/${id}/outcome`),
+
+  trackRecord: () => request<TrackRecord>('/track-record'),
 }

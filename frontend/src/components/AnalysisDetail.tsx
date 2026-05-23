@@ -5,7 +5,12 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 import { api } from '../api'
-import type { AnalysisDetail, AnalysisReports } from '../types'
+import type {
+  AnalysisDetail,
+  AnalysisOutcome,
+  AnalysisReports,
+  HorizonOutcome,
+} from '../types'
 import { DecisionBadge, StatusBadge } from './StatusBadge'
 import { ProgressBar } from './ProgressBar'
 
@@ -78,6 +83,8 @@ export function AnalysisDetailPage() {
       <Section title="Pipeline progress">
         <ProgressBar progress={data.progress} />
       </Section>
+
+      {data.status === 'completed' && <ForwardOutcomeSection id={data.id} />}
 
       <ReportsTabs reports={data.reports} status={data.status} />
 
@@ -333,5 +340,133 @@ function DangerZone({
         )}
       </div>
     </Section>
+  )
+}
+
+
+// ---------------------------------------------------------------------------
+// Forward outcome
+// ---------------------------------------------------------------------------
+
+const HORIZON_LABELS_DETAIL: Record<string, string> = {
+  '1d': '1 day',
+  '5d': '1 week',
+  '21d': '1 month',
+  '63d': '1 quarter',
+}
+
+function ForwardOutcomeSection({ id }: { id: string }) {
+  const o = useQuery({
+    queryKey: ['outcome', id],
+    queryFn: () => api.outcome(id),
+    // Cache for 60 s — outcomes rarely change once horizons resolve.
+    staleTime: 60_000,
+  })
+
+  // Render a placeholder while loading rather than nothing — the
+  // section heading should always be present so users notice it.
+  return (
+    <Section title="Forward outcome">
+      <p className="text-xs text-gold-500 mb-3">
+        How the call held up against actual price action. Horizons that
+        haven't elapsed yet show "—" and fill in automatically over time.
+      </p>
+      {o.isLoading && (
+        <div className="text-sm text-gold-600">Computing outcome…</div>
+      )}
+      {o.error && (
+        <div className="text-sm text-rose-700">
+          Could not load outcome:{' '}
+          <span className="font-mono text-xs">
+            {(o.error as Error).message}
+          </span>
+        </div>
+      )}
+      {o.data && <OutcomeGrid outcome={o.data} />}
+    </Section>
+  )
+}
+
+function OutcomeGrid({ outcome }: { outcome: AnalysisOutcome }) {
+  return (
+    <div className="bg-white border border-gold-200 rounded-xl p-4 shadow-sm">
+      <div className="text-xs text-gold-600 mb-3">
+        Decision <span className="font-semibold">{outcome.decision}</span> ·
+        expected{' '}
+        <span className="font-mono">
+          {outcome.expected_direction ?? 'n/a'}
+        </span>
+        {outcome.start_close !== null && (
+          <>
+            {' '}
+            · entry close{' '}
+            <span className="font-mono">{outcome.start_close.toFixed(2)}</span>
+          </>
+        )}
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {outcome.horizons.map((h) => (
+          <OutcomeCard key={h.horizon} horizon={h} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function OutcomeCard({ horizon }: { horizon: HorizonOutcome }) {
+  const pending = horizon.correct === null
+  const tone = pending
+    ? 'border-gold-200 bg-gold-50/50'
+    : horizon.correct
+      ? 'border-emerald-200 bg-emerald-50'
+      : 'border-rose-200 bg-rose-50'
+
+  const ret = horizon.forward_return
+  const retText =
+    ret === null ? '—' : `${ret >= 0 ? '+' : ''}${(ret * 100).toFixed(2)}%`
+
+  return (
+    <div className={`rounded-lg border ${tone} p-3`}>
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-semibold uppercase tracking-wide text-gold-700">
+          {HORIZON_LABELS_DETAIL[horizon.horizon] ?? horizon.horizon}
+        </span>
+        <Verdict correct={horizon.correct} />
+      </div>
+      <div className="mt-1.5 text-2xl font-bold tabular-nums">{retText}</div>
+      <div className="text-xs text-gold-600 mt-0.5">
+        actual{' '}
+        <span className="font-mono">{horizon.actual_direction}</span>
+        {horizon.end_close !== null && (
+          <>
+            {' '}· close{' '}
+            <span className="font-mono">{horizon.end_close.toFixed(2)}</span>
+          </>
+        )}
+      </div>
+      <div className="text-[10px] text-gold-500 mt-1">
+        target {horizon.target_date}
+      </div>
+    </div>
+  )
+}
+
+function Verdict({ correct }: { correct: boolean | null }) {
+  if (correct === null) {
+    return (
+      <span className="text-gold-500 text-[10px] uppercase">Pending</span>
+    )
+  }
+  if (correct) {
+    return (
+      <span className="text-emerald-700 text-[10px] uppercase font-semibold">
+        ✓ Correct
+      </span>
+    )
+  }
+  return (
+    <span className="text-rose-700 text-[10px] uppercase font-semibold">
+      ✗ Wrong
+    </span>
   )
 }
