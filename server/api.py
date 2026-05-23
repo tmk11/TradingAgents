@@ -31,6 +31,11 @@ from pydantic import BaseModel, Field, field_validator
 
 from .backtest import aggregate_track_record, get_or_compute_outcome
 from .runner import AnalysisRunner
+from .scheduler import (
+    BackgroundScheduler,
+    seed_recommended_schedules,
+)
+from .schedules import SCHEDULE_KINDS, ScheduleStore
 from .storage import AnalysisStore
 
 logger = logging.getLogger(__name__)
@@ -147,6 +152,73 @@ class AnalysisDetail(AnalysisSummary):
     reports: Dict[str, Any]
 
 
+# ---- Schedule request / response models ---------------------------------
+
+
+class CreateScheduleRequest(BaseModel):
+    """Form payload for ``POST /api/schedules``.
+
+    The two ``kind`` values map directly to ``server.scheduler``
+    decision functions; ``params`` is forwarded to ``ScheduleStore``
+    which clamps it via ``_validate_params`` so the frontend can pass
+    raw user input without parsing.
+    """
+
+    ticker: str = Field(..., min_length=1, max_length=32)
+    kind: str = Field(..., description="One of 'daily_after_close' or 'volatility_trigger'.")
+    name: Optional[str] = Field(default=None, max_length=120)
+    language: str = Field(default="English", min_length=2, max_length=32)
+    max_debate_rounds: int = Field(default=3, ge=1, le=10)
+    max_risk_discuss_rounds: int = Field(default=3, ge=1, le=10)
+    params: Optional[Dict[str, Any]] = None
+    enabled: bool = True
+
+    @field_validator("ticker")
+    @classmethod
+    def _validate_ticker(cls, v: str) -> str:
+        if not _TICKER_RE.match(v):
+            raise ValueError("ticker must be 1-32 chars of letters/digits/._-^=")
+        return v.strip().upper()
+
+    @field_validator("kind")
+    @classmethod
+    def _validate_kind(cls, v: str) -> str:
+        if v not in SCHEDULE_KINDS:
+            raise ValueError(
+                f"kind must be one of {SCHEDULE_KINDS}"
+            )
+        return v
+
+
+class UpdateScheduleRequest(BaseModel):
+    """Partial-update payload. All fields optional; only the ones
+    present are persisted."""
+
+    name: Optional[str] = Field(default=None, max_length=120)
+    enabled: Optional[bool] = None
+    language: Optional[str] = Field(default=None, min_length=2, max_length=32)
+    max_debate_rounds: Optional[int] = Field(default=None, ge=1, le=10)
+    max_risk_discuss_rounds: Optional[int] = Field(default=None, ge=1, le=10)
+    params: Optional[Dict[str, Any]] = None
+
+
+class ScheduleSummary(BaseModel):
+    id: str
+    name: str
+    ticker: str
+    asset_type: str
+    kind: str
+    params: Dict[str, Any]
+    language: str
+    max_debate_rounds: int
+    max_risk_discuss_rounds: int
+    enabled: bool
+    last_run_at: Optional[str] = None
+    last_run_analysis_id: Optional[str] = None
+    last_check_at: Optional[str] = None
+    created_at: str
+
+
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
@@ -156,6 +228,8 @@ def create_app(
     *,
     store: Optional[AnalysisStore] = None,
     runner: Optional[AnalysisRunner] = None,
+    schedule_store: Optional[ScheduleStore] = None,
+    scheduler: Optional[BackgroundScheduler] = None,
     static_dir: Optional[Path] = None,
     enable_cors: bool = True,
 ) -> FastAPI:
@@ -166,6 +240,11 @@ def create_app(
             to scope state to a tmp_path.
         runner: Override the default runner. Pass a no-op stub in
             tests to skip the LLM stack.
+        schedule_store: Override the default schedule store (tmp_path
+            in tests).
+        scheduler: Override the default ``BackgroundScheduler``. Tests
+            usually pass a stub whose ``start``/``stop`` are no-ops so
+            the wall-clock thread never actually runs.
         static_dir: Where to find the built React frontend
             (``frontend/dist``). Defaults to the sibling ``frontend/
             dist`` of the repo root. Pass ``False`` to disable static
@@ -175,6 +254,18 @@ def create_app(
     """
     store = store if store is not None else AnalysisStore()
     runner = runner if runner is not None else AnalysisRunner(store)
+    schedule_store = (
+        schedule_store if schedule_store is not None else ScheduleStore()
+    )
+    scheduler = (
+        scheduler
+        if scheduler is not None
+        else BackgroundScheduler(
+            analysis_store=store,
+            schedule_store=schedule_store,
+            runner=runner,
+        )
+    )
 
     if static_dir is None:
         static_dir = Path(__file__).resolve().parent.parent / "frontend" / "dist"
@@ -182,9 +273,11 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         runner.start()
+        scheduler.start()
         try:
             yield
         finally:
+            scheduler.stop()
             runner.stop()
 
     app = FastAPI(
@@ -331,6 +424,137 @@ def create_app(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="analysis not found",
             )
+
+    # ---- Schedules CRUD ------------------------------------------------
+
+    def get_schedule_store() -> ScheduleStore:
+        return schedule_store
+
+    def get_scheduler() -> BackgroundScheduler:
+        return scheduler
+
+    @app.get("/api/schedules", response_model=List[ScheduleSummary])
+    def list_schedules(
+        ss: ScheduleStore = Depends(get_schedule_store),
+    ) -> List[Dict[str, Any]]:
+        return ss.list()
+
+    @app.post(
+        "/api/schedules",
+        response_model=ScheduleSummary,
+        status_code=status.HTTP_201_CREATED,
+    )
+    def create_schedule(
+        req: CreateScheduleRequest,
+        ss: ScheduleStore = Depends(get_schedule_store),
+    ) -> Dict[str, Any]:
+        return ss.create(
+            ticker=req.ticker,
+            asset_type=detect_asset_type(req.ticker),
+            kind=req.kind,
+            name=req.name,
+            params=req.params or {},
+            language=req.language,
+            max_debate_rounds=req.max_debate_rounds,
+            max_risk_discuss_rounds=req.max_risk_discuss_rounds,
+            enabled=req.enabled,
+        )
+
+    @app.patch(
+        "/api/schedules/{schedule_id}", response_model=ScheduleSummary
+    )
+    def update_schedule(
+        schedule_id: str,
+        req: UpdateScheduleRequest,
+        ss: ScheduleStore = Depends(get_schedule_store),
+    ) -> Dict[str, Any]:
+        # Build a kwargs dict from only the fields the client provided
+        # — Pydantic v2's ``model_dump(exclude_unset=True)`` is the
+        # idiomatic way to get a partial-update payload.
+        changes = req.model_dump(exclude_unset=True)
+        record = ss.update(schedule_id, **changes)
+        if record is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="schedule not found",
+            )
+        return record
+
+    @app.delete(
+        "/api/schedules/{schedule_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+    def delete_schedule(
+        schedule_id: str,
+        ss: ScheduleStore = Depends(get_schedule_store),
+    ) -> None:
+        try:
+            ok = ss.delete(schedule_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="invalid schedule id",
+            )
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="schedule not found",
+            )
+
+    @app.post(
+        "/api/schedules/{schedule_id}/run-now",
+        response_model=AnalysisSummary,
+        status_code=status.HTTP_201_CREATED,
+    )
+    def run_schedule_now(
+        schedule_id: str,
+        s: AnalysisStore = Depends(get_store),
+        r: AnalysisRunner = Depends(get_runner),
+        ss: ScheduleStore = Depends(get_schedule_store),
+    ) -> Dict[str, Any]:
+        """Manual-trigger entry point. Useful right after FOMC / CPI /
+        NFP — the user clicks once and skips waiting for the next
+        scheduled tick. Updates ``last_run_at`` so the volatility
+        throttle still applies after the manual fire."""
+        sched = ss.get(schedule_id)
+        if sched is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="schedule not found",
+            )
+        record = s.create(
+            ticker=sched["ticker"],
+            asset_type=sched.get("asset_type")
+            or detect_asset_type(sched["ticker"]),
+            analysis_date=datetime.utcnow().date().isoformat(),
+            language=sched.get("language", "English"),
+            max_debate_rounds=int(sched.get("max_debate_rounds", 3)),
+            max_risk_discuss_rounds=int(
+                sched.get("max_risk_discuss_rounds", 3)
+            ),
+        )
+        r.submit(record["id"])
+        ss.mark_fired(schedule_id, analysis_id=record["id"])
+        return {k: v for k, v in record.items() if k != "reports"}
+
+    @app.post(
+        "/api/schedules/seed-recommended",
+        response_model=List[ScheduleSummary],
+        status_code=status.HTTP_201_CREATED,
+    )
+    def seed_recommended(
+        ticker: str = "GLD",
+        language: str = "English",
+        ss: ScheduleStore = Depends(get_schedule_store),
+    ) -> List[Dict[str, Any]]:
+        """Idempotent: creates the daily-after-close + volatility
+        schedules for the given ticker if missing, returns whatever
+        is now present (existing or just-created)."""
+        out = seed_recommended_schedules(
+            ss, ticker=ticker, language=language
+        )
+        # Order: daily first, volatility second.
+        return [out["daily"], out["volatility"]]
 
     # ---- Frontend (production build) ----------------------------------
 
