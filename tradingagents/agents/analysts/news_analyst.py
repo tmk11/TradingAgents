@@ -2,6 +2,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_global_news,
+    get_gold_news,
     get_language_instruction,
     get_news,
 )
@@ -25,10 +26,17 @@ def create_news_analyst(llm):
             state["company_of_interest"], asset_type
         )
 
+        # Tool selection is asset-aware. Commodity (gold) runs additionally
+        # get ``get_gold_news`` — Kitco + Mining.com RSS — because the
+        # default yfinance/Alpha Vantage pipelines undercover bullion and
+        # precious-metals industry coverage. Equity and crypto runs see
+        # the original tool set, so behaviour is unchanged for them.
         tools = [
             get_news,
             get_global_news,
         ]
+        if asset_type == "commodity":
+            tools.append(get_gold_news)
 
         gold_focus_addendum = (
             ""
@@ -44,6 +52,11 @@ def create_news_analyst(llm):
                 " Ticker-specific news is typically thin for futures and"
                 " spot pairs — supplement with global news so the report"
                 " reflects the actual price drivers."
+                " Always call get_gold_news at least once for"
+                " bullion-native coverage from Kitco and Mining.com;"
+                " these sources surface central-bank flows, ETF holdings,"
+                " and miner / supply-side headlines that Yahoo Finance"
+                " alone tends to miss."
             )
         )
 

@@ -36,7 +36,8 @@ from tradingagents.agents.utils.agent_utils import (
     get_income_statement,
     get_news,
     get_insider_transactions,
-    get_global_news
+    get_global_news,
+    get_gold_news,
 )
 
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
@@ -178,10 +179,16 @@ class TradingAgentsGraph:
             ),
             "news": ToolNode(
                 [
-                    # News and insider information
+                    # News and insider information.
+                    # ``get_gold_news`` is included unconditionally on the
+                    # ToolNode side so any tool_call routed here resolves;
+                    # the News Analyst only advertises (binds) it when
+                    # asset_type == "commodity", so equity / crypto runs
+                    # never see it offered to the LLM.
                     get_news,
                     get_global_news,
                     get_insider_transactions,
+                    get_gold_news,
                 ]
             ),
             "fundamentals": ToolNode(

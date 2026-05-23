@@ -59,6 +59,22 @@ gold complex. High-level adjustments:
   ditch generic equity-market searches in favour of seven gold-centric
   queries (Fed real yields, DXY, central-bank purchases, geopolitical
   risk, breakeven inflation, ETF flows, EM physical demand).
+- **Gold-native news sources added.** A new `get_gold_news` tool is
+  bound to the News Analyst only when `asset_type == "commodity"`.
+  It queries three RSS feeds in parallel and combines them into a
+  single attributed prompt block:
+  - **Mining.com** — industry trade press; relevant for miner ETFs
+    (GDX/GDXJ) and supply-side context (production, M&A,
+    jurisdiction risk).
+  - **Investing.com Commodities & Futures** — direct gold-spot and
+    geopolitical-driver headlines.
+  - **Investing.com Economy** — Fed / CPI / real-yield coverage,
+    the macro inputs that determine real rates.
+  
+  The feed registry lives in `tradingagents/dataflows/gold_news.py`
+  (`GOLD_FEEDS`); append a `GoldNewsFeed(label, url)` to add more.
+  All fetchers degrade gracefully — a dead feed produces a clearly
+  labelled placeholder rather than an exception.
 - **Sentiment analyst widens reach for gold.** When the asset type is
   `commodity`, the analyst queries r/Gold, r/Wallstreetsilver,
   r/preciousmetals, and r/SilverBugs instead of the default finance
