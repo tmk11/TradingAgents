@@ -30,16 +30,18 @@ class GraphSetup:
         self.analyst_concurrency_limit = analyst_concurrency_limit
 
     def setup_graph(
-        self, selected_analysts=["market", "social", "news", "fundamentals"]
+        self, selected_analysts=["market", "social", "news"]
     ):
         """Set up and compile the agent workflow graph.
 
         Args:
             selected_analysts (list): List of analyst types to include. Options are:
                 - "market": Market analyst
-                - "social": Social media analyst
+                - "social": Sentiment analyst (news + StockTwits + Reddit)
                 - "news": News analyst
-                - "fundamentals": Fundamentals analyst
+                - "fundamentals": Fundamentals analyst (equities only — the
+                  Gold Edition default omits this because commodities have
+                  no company-style fundamentals)
         """
         plan = build_analyst_execution_plan(
             selected_analysts,

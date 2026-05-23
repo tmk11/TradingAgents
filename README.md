@@ -25,6 +25,56 @@
 
 ---
 
+# TradingAgents (Gold Edition): Multi-Agents LLM Framework for Gold-Complex Analysis
+
+> **Fork notice.** This is a gold-focused fork of the upstream
+> [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents)
+> framework, adapted to specialise in the gold complex (futures, spot
+> pairs, ETFs, miners) rather than equities. See
+> [Gold Edition changes](#gold-edition-changes) below for the diff.
+
+## Gold Edition changes
+
+The framework has been retargeted from general equity analysis to the
+gold complex. High-level adjustments:
+
+- **New `commodity` asset type.** Tickers in the gold complex auto-resolve
+  to `AssetType.COMMODITY`: gold futures (`GC=F`, `MGC=F`), spot pairs
+  (`XAUUSD=X`, `XAU=X`), physical-backed ETFs (`GLD`, `IAU`, `SGOL`,
+  `BAR`, `AAAU`, `GLDM`, `OUNZ`), miner ETFs (`GDX`, `GDXJ`, `RING`,
+  `NUGT`, `JNUG`), and the PHLX Gold/Silver index (`^XAU`).
+- **Fundamentals Analyst is auto-disabled** for `commodity` (and `crypto`)
+  asset types. Gold has no earnings, balance sheet, or cash-flow
+  statements, so running the equity-style fundamentals tools wastes
+  tokens and risks fabricated reasoning. The default
+  `selected_analysts` is now `["market", "social", "news"]`.
+- **Prompts rewired for gold drivers.** Bull, Bear, and Risk debators
+  branch by asset type. For `commodity`, the prompts focus on the
+  inputs that actually move bullion: USD strength (DXY), real yields
+  (10Y TIPS, 5y5y forwards), Fed/ECB/BoJ policy stance, central-bank
+  gold purchases & reserve diversification, geopolitical risk,
+  inflation expectations, ETF flows, futures positioning, and
+  China/India physical demand.
+- **Macro news queries rewritten.** The default `global_news_queries`
+  ditch generic equity-market searches in favour of seven gold-centric
+  queries (Fed real yields, DXY, central-bank purchases, geopolitical
+  risk, breakeven inflation, ETF flows, EM physical demand).
+- **Sentiment analyst widens reach for gold.** When the asset type is
+  `commodity`, the analyst queries r/Gold, r/Wallstreetsilver,
+  r/preciousmetals, and r/SilverBugs instead of the default finance
+  subs — these communities surface the physical-premium, central-bank,
+  and macro chatter that matter for bullion. Override via the
+  `commodity_subreddits` config key.
+- **CLI defaults to GLD** with gold-complex examples. Stock and crypto
+  tickers are still accepted; the framework just routes them through
+  the original equity / crypto pipelines unchanged.
+
+The upstream README content below describes the framework's general
+architecture; everything still applies, with the Gold Edition adjusting
+the asset focus and prompts as described above.
+
+---
+
 # TradingAgents: Multi-Agents LLM Financial Trading Framework
 
 ## News
