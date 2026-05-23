@@ -29,6 +29,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
+from .backtest import aggregate_track_record, get_or_compute_outcome
 from .runner import AnalysisRunner
 from .storage import AnalysisStore
 
@@ -267,6 +268,50 @@ def create_app(
         # Always include ``reports`` (may be empty for pending/running).
         record.setdefault("reports", {})
         return record
+
+    @app.get("/api/analyses/{analysis_id}/outcome")
+    def get_outcome(
+        analysis_id: str, s: AnalysisStore = Depends(get_store)
+    ) -> Dict[str, Any]:
+        """Forward-return scoring for one completed analysis.
+
+        Computes lazily and caches on the record. Returns 409 for
+        analyses that haven't completed yet (so the frontend can
+        distinguish "still running" from "no outcome data").
+        """
+        try:
+            record = s.get(analysis_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="invalid analysis id",
+            )
+        if record is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="analysis not found",
+            )
+        if record.get("status") != "completed":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="analysis is not completed yet",
+            )
+        return get_or_compute_outcome(record, s)
+
+    @app.get("/api/track-record")
+    def get_track_record(
+        s: AnalysisStore = Depends(get_store),
+    ) -> Dict[str, Any]:
+        """Aggregate hit-rate across all completed analyses.
+
+        Iterating every record on every request would be expensive at
+        scale, but the store is bounded by the number of analyses a
+        single operator has run (typically << 1000) and outcomes are
+        cached on-record after the first scoring pass — so warm calls
+        do no network I/O at all.
+        """
+        records = s.list(summary_only=True)
+        return aggregate_track_record(records, s)
 
     @app.delete(
         "/api/analyses/{analysis_id}", status_code=status.HTTP_204_NO_CONTENT

@@ -3,6 +3,7 @@ import { Link, Route, Routes } from 'react-router-dom'
 import { AnalysisDetailPage } from './components/AnalysisDetail'
 import { AnalysisListPage } from './components/AnalysisList'
 import { NewAnalysisPage } from './components/AnalysisForm'
+import { TrackRecordPage } from './components/TrackRecord'
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<AnalysisListPage />} />
           <Route path="/new" element={<NewAnalysisPage />} />
+          <Route path="/track-record" element={<TrackRecordPage />} />
           <Route path="/analyses/:id" element={<AnalysisDetailPage />} />
           <Route
             path="*"
@@ -54,6 +56,12 @@ function Header() {
             className="px-3 py-2 text-sm font-medium text-gold-700 hover:text-gold-900 hover:bg-gold-50 rounded-md"
           >
             Dashboard
+          </Link>
+          <Link
+            to="/track-record"
+            className="px-3 py-2 text-sm font-medium text-gold-700 hover:text-gold-900 hover:bg-gold-50 rounded-md"
+          >
+            Track record
           </Link>
           <Link
             to="/new"

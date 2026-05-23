@@ -79,6 +79,52 @@ export interface AnalysisDetail extends AnalysisSummary {
   reports: AnalysisReports
 }
 
+// ---------------------------------------------------------------------------
+// Backtest / track-record
+// ---------------------------------------------------------------------------
+
+export type ForwardDirection = 'up' | 'down' | 'flat' | 'unknown'
+
+export interface HorizonOutcome {
+  horizon: string         // "1d" / "5d" / "21d" / "63d"
+  days: number
+  target_date: string     // YYYY-MM-DD calendar date
+  end_close: number | null
+  forward_return: number | null  // decimal, e.g. 0.0123 = +1.23%
+  actual_direction: ForwardDirection
+  correct: boolean | null  // null until the target date elapses
+}
+
+export interface AnalysisOutcome {
+  decision: string
+  expected_direction: 'up' | 'down' | 'flat' | null
+  start_close: number | null
+  computed_at: string
+  horizons: HorizonOutcome[]
+}
+
+/** Per-decision counters within one horizon's aggregate. */
+export interface DecisionStats {
+  total: number
+  correct: number
+  hit_rate: number | null
+}
+
+/** One horizon's aggregate row in the track-record summary. */
+export interface HorizonStats {
+  total: number
+  correct: number
+  hit_rate: number | null
+  by_decision: Record<string, DecisionStats>
+}
+
+export interface TrackRecord {
+  total_completed: number
+  total_with_outcomes: number
+  horizons: Record<string, HorizonStats>
+  computed_at: string
+}
+
 export interface CreateAnalysisRequest {
   ticker: string
   analysis_date: string
