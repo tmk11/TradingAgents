@@ -105,6 +105,25 @@ gold complex. High-level adjustments:
   tickers are still accepted; the framework just routes them through
   the original equity / crypto pipelines unchanged.
 
+## Optional upgrades (opt-in)
+
+Two performance / quality knobs are available beyond the upstream
+framework. Both are off by default; the legacy behaviour is unchanged
+unless you flip the relevant flag.
+
+- **Semantic memory (RAG)** — index every resolved decision into a
+  Chroma vector store and have the Portfolio Manager read past
+  context selected by embedding similarity (against the current
+  run's analyst reports + plans) instead of pure recency. Enable
+  with `TRADINGAGENTS_RAG_ENABLED=true`.
+- **Parallel analysts** — fan the analyst nodes out from `START`
+  with isolated `messages` subgraphs and join on the Bull
+  Researcher, dropping wall time roughly N-fold during the analyst
+  phase. Enable with `TRADINGAGENTS_ANALYST_CONCURRENCY=4`.
+
+See [`docs/rag_and_parallel.md`](docs/rag_and_parallel.md) for
+architecture, config keys, failure semantics, and tests.
+
 The upstream README content below describes the framework's general
 architecture; everything still applies, with the Gold Edition adjusting
 the asset focus and prompts as described above.

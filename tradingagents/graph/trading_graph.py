@@ -43,6 +43,7 @@ from tradingagents.agents.utils.agent_utils import (
 
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
 from .conditional_logic import ConditionalLogic
+from .memory_retriever_node import create_memory_retriever_node
 from .setup import GraphSetup
 from .propagation import Propagator
 from .reflection import Reflector
@@ -121,6 +122,11 @@ class TradingAgentsGraph:
             self.tool_nodes,
             self.conditional_logic,
             analyst_concurrency_limit=self.config.get("analyst_concurrency_limit", 1),
+            memory_retriever_node=create_memory_retriever_node(
+                self.memory_log,
+                n_same=self.config.get("rag_n_same_ticker", 5),
+                n_cross=self.config.get("rag_n_cross_ticker", 3),
+            ),
         )
 
         self.propagator = Propagator(
