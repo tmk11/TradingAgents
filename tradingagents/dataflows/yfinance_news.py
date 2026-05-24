@@ -6,6 +6,7 @@ import yfinance as yf
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
+from ._archive_indexer import record_news_articles
 from .config import get_config
 from .stockstats_utils import yf_retry
 
@@ -81,6 +82,8 @@ def get_news_yfinance(
 
         news_str = ""
         filtered_count = 0
+        # Captured for the news/macro archive (no-op when disabled).
+        indexed_articles = []
 
         for article in news:
             data = _extract_article_data(article)
@@ -98,9 +101,16 @@ def get_news_yfinance(
                 news_str += f"Link: {data['link']}\n"
             news_str += "\n"
             filtered_count += 1
+            indexed_articles.append(data)
 
         if filtered_count == 0:
             return f"No news found for {ticker} between {start_date} and {end_date}"
+
+        # Mirror into the news/macro archive. Side-effect only — never
+        # gates the return value, never raises.
+        record_news_articles(
+            indexed_articles, source="yfinance:ticker", ticker=ticker
+        )
 
         return f"## {ticker} News, from {start_date} to {end_date}:\n\n{news_str}"
 
@@ -170,6 +180,8 @@ def get_global_news_yfinance(
         start_date = start_dt.strftime("%Y-%m-%d")
 
         news_str = ""
+        # Captured for the news/macro archive (no-op when disabled).
+        indexed_articles = []
         for article in all_news[:limit]:
             # Handle both flat and nested structures
             if "content" in article:
@@ -183,11 +195,19 @@ def get_global_news_yfinance(
                 publisher = data["publisher"]
                 link = data["link"]
                 summary = data["summary"]
+                indexed_articles.append(data)
             else:
                 title = article.get("title", "No title")
                 publisher = article.get("publisher", "Unknown")
                 link = article.get("link", "")
                 summary = ""
+                indexed_articles.append({
+                    "title": title,
+                    "summary": summary,
+                    "publisher": publisher,
+                    "link": link,
+                    "pub_date": None,
+                })
 
             news_str += f"### {title} (source: {publisher})\n"
             if summary:
@@ -195,6 +215,9 @@ def get_global_news_yfinance(
             if link:
                 news_str += f"Link: {link}\n"
             news_str += "\n"
+
+        # Mirror into the news/macro archive (no-op when disabled).
+        record_news_articles(indexed_articles, source="yfinance:global")
 
         return f"## Global Market News, from {start_date} to {curr_date}:\n\n{news_str}"
 

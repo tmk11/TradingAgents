@@ -39,6 +39,8 @@ from typing import List, Optional, Sequence
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from ._archive_indexer import record_news_articles
+
 logger = logging.getLogger(__name__)
 
 # A real browser-style UA: some publishers (Investing.com in particular)
@@ -266,6 +268,30 @@ def _format_block(
     return "\n".join(lines)
 
 
+def _archive_source_for_url(url: str) -> str:
+    """Build a stable archive ``source`` tag from a feed URL.
+
+    Stable across schema changes — the registry can grow new feeds
+    without invalidating existing index ids, since each feed maps
+    deterministically to the same source label.
+    """
+    # Extract the registrable host from a URL.  We don't reach for a
+    # full-blown URL parser because RSS URLs are simple enough and the
+    # extra dependency would only buy us .invest -> .com normalisation,
+    # which we don't need.
+    lower = url.lower()
+    for prefix in ("https://", "http://"):
+        if lower.startswith(prefix):
+            lower = lower[len(prefix):]
+            break
+    host = lower.split("/", 1)[0]
+    if host.startswith("www."):
+        host = host[4:]
+    if host.startswith("feeds."):
+        host = host[6:]
+    return f"rss:{host}" if host else "rss:unknown"
+
+
 def fetch_feed(
     feed: GoldNewsFeed,
     *,
@@ -282,6 +308,14 @@ def fetch_feed(
     items = _filter_and_trim(
         raw_items, look_back_days=look_back_days, limit=limit, curr_date=curr_date
     )
+    # Mirror into the news/macro archive (no-op when disabled). Done
+    # before formatting so a placeholder block from an unreachable
+    # feed simply records zero items rather than mis-indexing the
+    # placeholder text.
+    if items:
+        record_news_articles(
+            items, source=_archive_source_for_url(feed.url)
+        )
     return _format_block(
         feed.label,
         items,

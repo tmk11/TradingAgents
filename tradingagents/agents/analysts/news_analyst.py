@@ -5,6 +5,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_gold_news,
     get_language_instruction,
     get_news,
+    search_news_archive,
 )
 from tradingagents.dataflows.config import get_config
 
@@ -37,6 +38,13 @@ def create_news_analyst(llm):
         ]
         if asset_type == "commodity":
             tools.append(get_gold_news)
+        # When the news/macro archive is enabled, expose the semantic
+        # search tool so the analyst can query historical context
+        # accumulated from prior runs. Off by default; gated on the
+        # active config rather than asset_type because the archive is
+        # useful for every asset class.
+        if get_config().get("news_archive_enabled"):
+            tools.append(search_news_archive)
 
         gold_focus_addendum = (
             ""

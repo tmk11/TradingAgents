@@ -44,6 +44,8 @@ from typing import List, Optional, Sequence, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from ._archive_indexer import record_macro_snapshot
+
 logger = logging.getLogger(__name__)
 
 # Browser-style UA: FRED rate-limits clearly-identified bots more
@@ -474,4 +476,12 @@ def fetch_gold_macro_data(
         sections.append("## Macro time series (FRED)\n")
         sections.extend(by_provider["fred"])
 
-    return "\n".join(sections)
+    rendered = "\n".join(sections)
+    # Mirror into the news/macro archive (no-op when disabled). Done
+    # last so we capture the fully rendered block — same shape the
+    # analyst sees, which keeps embedding text consistent with future
+    # search results.
+    record_macro_snapshot(
+        rendered, curr_date=curr_date, lookback_days=lookback_days
+    )
+    return rendered

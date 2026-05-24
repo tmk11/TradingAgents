@@ -18,11 +18,14 @@ boundaries clean: this package has no LangGraph dependency.
 
 from .embeddings import FakeEmbedder, OpenAIEmbedder, create_embedder
 from .memory_retriever import SemanticMemoryRetriever
+from .news_archive import ArchiveArticle, NewsArchive
 from .vector_store import MemoryVectorStore
 
 __all__ = [
+    "ArchiveArticle",
     "FakeEmbedder",
     "MemoryVectorStore",
+    "NewsArchive",
     "OpenAIEmbedder",
     "SemanticMemoryRetriever",
     "create_embedder",

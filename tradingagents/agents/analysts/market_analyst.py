@@ -5,6 +5,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_language_instruction,
     get_macro_data,
     get_stock_data,
+    search_macro_archive,
 )
 from tradingagents.dataflows.config import get_config
 
@@ -30,6 +31,11 @@ def create_market_analyst(llm):
         ]
         if asset_type == "commodity":
             tools.append(get_macro_data)
+            # The historical-macro RAG tool is only useful for commodity
+            # runs (the archive is populated only by get_macro_data
+            # invocations) and only when archive indexing is enabled.
+            if get_config().get("news_archive_enabled"):
+                tools.append(search_macro_archive)
 
         system_message = (
             """You are a trading assistant tasked with analyzing financial markets. Your role is to select the **most relevant indicators** for a given market condition or trading strategy from the following list. The goal is to choose up to **8 indicators** that provide complementary insights without redundancy. Categories and each category's indicators are:
