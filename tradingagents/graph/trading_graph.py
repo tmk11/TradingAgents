@@ -39,6 +39,8 @@ from tradingagents.agents.utils.agent_utils import (
     get_global_news,
     get_gold_news,
     get_macro_data,
+    search_macro_archive,
+    search_news_archive,
 )
 
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
@@ -169,6 +171,11 @@ class TradingAgentsGraph:
 
     def _create_tool_nodes(self) -> Dict[str, ToolNode]:
         """Create tool nodes for different data sources using abstract methods."""
+        # The archive-search tools are added unconditionally on the
+        # ToolNode side so any tool_call routed here resolves; each
+        # analyst's prompt only advertises (binds) them when
+        # ``news_archive_enabled`` is set, so off-state runs never
+        # see them offered to the LLM.
         return {
             "market": ToolNode(
                 [
@@ -183,12 +190,14 @@ class TradingAgentsGraph:
                     # equity / crypto runs never see it offered to the
                     # LLM.
                     get_macro_data,
+                    search_macro_archive,
                 ]
             ),
             "social": ToolNode(
                 [
                     # News tools for social media analysis
                     get_news,
+                    search_news_archive,
                 ]
             ),
             "news": ToolNode(
@@ -203,6 +212,7 @@ class TradingAgentsGraph:
                     get_global_news,
                     get_insider_transactions,
                     get_gold_news,
+                    search_news_archive,
                 ]
             ),
             "fundamentals": ToolNode(

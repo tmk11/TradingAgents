@@ -21,6 +21,8 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_RAG_EMBEDDING_PROVIDER": "rag_embedding_provider",
     "TRADINGAGENTS_RAG_EMBEDDING_MODEL":  "rag_embedding_model",
     "TRADINGAGENTS_ANALYST_CONCURRENCY":  "analyst_concurrency_limit",
+    "TRADINGAGENTS_NEWS_ARCHIVE_ENABLED": "news_archive_enabled",
+    "TRADINGAGENTS_NEWS_ARCHIVE_PATH":    "news_archive_path",
 }
 
 
@@ -103,6 +105,25 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "rag_embedding_model": "text-embedding-3-small",
     "rag_n_same_ticker": 5,
     "rag_n_cross_ticker": 3,
+    # ---- News + macro archive (RAG over dataflow output) -----------
+    # When True, every news article fetched by ``get_news`` /
+    # ``get_global_news`` / ``get_gold_news`` is upserted into a
+    # persistent Chroma collection, and every macro snapshot rendered
+    # by ``get_macro_data`` is indexed too. Two new tools become
+    # available — ``search_news_archive`` and ``search_macro_archive``
+    # — bound to the News Analyst (and the Market Analyst on commodity
+    # runs) so they can retrieve historical context by embedding
+    # similarity instead of paying a fresh fetch every run.
+    #
+    # Reuses ``rag_embedding_provider`` / ``rag_embedding_model`` so a
+    # single embedder powers both the decision-log RAG (rag_enabled)
+    # and the news/macro archive. Off by default so existing runs are
+    # unchanged; enable independently of ``rag_enabled``.
+    "news_archive_enabled": False,
+    "news_archive_path": os.getenv(
+        "TRADINGAGENTS_NEWS_ARCHIVE_PATH",
+        os.path.join(_TRADINGAGENTS_HOME, "news_archive", "chroma"),
+    ),
     # News / data fetching parameters
     # Increase for longer lookback strategies or to broaden macro coverage;
     # decrease to reduce token usage in agent prompts.

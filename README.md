@@ -120,8 +120,15 @@ unless you flip the relevant flag.
   with isolated `messages` subgraphs and join on the Bull
   Researcher, dropping wall time roughly N-fold during the analyst
   phase. Enable with `TRADINGAGENTS_ANALYST_CONCURRENCY=4`.
+- **News + macro archive** — every news / macro fetch is mirrored
+  into a persistent Chroma collection, and `search_news_archive` /
+  `search_macro_archive` tools are bound to the News + Market
+  analysts so they can query the corpus by embedding similarity
+  instead of paying a fresh fetch every run. Enable with
+  `TRADINGAGENTS_NEWS_ARCHIVE_ENABLED=true`.
 
-See [`docs/rag_and_parallel.md`](docs/rag_and_parallel.md) for
+See [`docs/rag_and_parallel.md`](docs/rag_and_parallel.md) and
+[`docs/rag_news_archive.md`](docs/rag_news_archive.md) for
 architecture, config keys, failure semantics, and tests.
 
 The upstream README content below describes the framework's general

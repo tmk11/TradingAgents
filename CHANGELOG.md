@@ -10,6 +10,28 @@ Breaking changes within the 0.x line are called out explicitly.
 
 ### Added
 
+- **News + macro archive (third opt-in RAG layer).** When
+  `news_archive_enabled = True`, every news article fetched by
+  `get_news` / `get_global_news` / `get_gold_news` is upserted into a
+  persistent Chroma collection, and every macro snapshot rendered by
+  `get_macro_data` is indexed too. Two new tools — `search_news_archive`
+  and `search_macro_archive` — are bound to the News Analyst (and the
+  Market Analyst on commodity runs) so they can retrieve historical
+  context by embedding similarity instead of paying a fresh fetch
+  every run. Off by default; reuses `rag_embedding_provider` /
+  `rag_embedding_model` so a single embedder powers both the
+  decision-log RAG and the news/macro archive.
+  - New module `tradingagents/retrieval/news_archive.py`
+    (`ArchiveArticle`, `NewsArchive` with article + macro_snapshot kinds).
+  - New module `tradingagents/dataflows/_archive_indexer.py` — lazy
+    facade with `record_news_articles` + `record_macro_snapshot`,
+    fire-and-forget no-op when disabled.
+  - New module `tradingagents/agents/utils/archive_search_tools.py`
+    with the two `@tool` callables.
+  - Hooks in `yfinance_news`, `gold_news`, `macro_data`.
+  - Env vars: `TRADINGAGENTS_NEWS_ARCHIVE_ENABLED`,
+    `TRADINGAGENTS_NEWS_ARCHIVE_PATH`.
+
 - **Optional RAG / semantic memory.** When `rag_enabled` is set, every
   resolved decision is indexed into a local Chroma vector store and a
   new `Memory Retriever` graph node — wired between the Trader and the
@@ -42,7 +64,10 @@ Breaking changes within the 0.x line are called out explicitly.
 ### Documentation
 
 - New guide: `docs/rag_and_parallel.md` — architecture, config keys,
-  failure semantics, and test instructions for both upgrades.
+  failure semantics, and test instructions for the first two upgrades
+  (semantic memory + parallel analysts).
+- New guide: `docs/rag_news_archive.md` — architecture and config for
+  the news + macro archive layer.
 
 ## [0.2.5] — 2026-05-11
 

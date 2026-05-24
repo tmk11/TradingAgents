@@ -22,6 +22,10 @@ from tradingagents.agents.utils.news_data_tools import (
 from tradingagents.agents.utils.macro_data_tools import (
     get_macro_data,
 )
+from tradingagents.agents.utils.archive_search_tools import (
+    search_macro_archive,
+    search_news_archive,
+)
 
 
 def get_language_instruction() -> str:
