@@ -17,6 +17,10 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_MAX_RISK_ROUNDS":      "max_risk_discuss_rounds",
     "TRADINGAGENTS_CHECKPOINT_ENABLED":   "checkpoint_enabled",
     "TRADINGAGENTS_BENCHMARK_TICKER":     "benchmark_ticker",
+    "TRADINGAGENTS_RAG_ENABLED":          "rag_enabled",
+    "TRADINGAGENTS_RAG_EMBEDDING_PROVIDER": "rag_embedding_provider",
+    "TRADINGAGENTS_RAG_EMBEDDING_MODEL":  "rag_embedding_model",
+    "TRADINGAGENTS_ANALYST_CONCURRENCY":  "analyst_concurrency_limit",
 }
 
 
@@ -74,7 +78,31 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,
     "max_recur_limit": 100,
+    # When > 1, analysts run as parallel subgraphs (each with isolated
+    # ``messages`` state) rather than the legacy sequential chain. The
+    # parent graph fans out from START to every selected analyst and
+    # joins on Bull Researcher, so wall time drops roughly N-fold for
+    # the analyst phase. Defaults to 1 for backward-compatible
+    # behaviour. See ``tradingagents/graph/analyst_subgraph.py``.
     "analyst_concurrency_limit": 1,
+    # ---- RAG / semantic memory ------------------------------------
+    # When True, ``TradingMemoryLog`` indexes every resolved decision
+    # into a Chroma vector store and the new ``Memory Retriever`` graph
+    # node selects past context by embedding similarity (over analyst
+    # reports + plans) instead of pure recency. Off by default so
+    # existing runs and tests are unchanged.
+    "rag_enabled": False,
+    "rag_vector_store_path": os.getenv(
+        "TRADINGAGENTS_RAG_VECTOR_STORE_PATH",
+        os.path.join(_TRADINGAGENTS_HOME, "memory", "chroma"),
+    ),
+    # "openai" uses ``langchain_openai.OpenAIEmbeddings`` and requires
+    # ``OPENAI_API_KEY``. "fake" is a deterministic hash-based embedder
+    # for offline tests and quick smoke runs (no network, no API key).
+    "rag_embedding_provider": "openai",
+    "rag_embedding_model": "text-embedding-3-small",
+    "rag_n_same_ticker": 5,
+    "rag_n_cross_ticker": 3,
     # News / data fetching parameters
     # Increase for longer lookback strategies or to broaden macro coverage;
     # decrease to reduce token usage in agent prompts.

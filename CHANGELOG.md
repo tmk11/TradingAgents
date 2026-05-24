@@ -6,6 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Breaking changes within the 0.x line are called out explicitly.
 
+## [Unreleased]
+
+### Added
+
+- **Optional RAG / semantic memory.** When `rag_enabled` is set, every
+  resolved decision is indexed into a local Chroma vector store and a
+  new `Memory Retriever` graph node — wired between the Trader and the
+  risk debate — selects the Portfolio Manager's `past_context` by
+  embedding similarity against the current run's analyst reports and
+  plans, instead of pure recency. Off by default; falls back to
+  recency-based retrieval on any infrastructure failure so a trading
+  run never breaks because of RAG misconfiguration.
+  - New package `tradingagents/retrieval/` (`embeddings.py`,
+    `vector_store.py`, `memory_retriever.py`).
+  - New node `tradingagents/graph/memory_retriever_node.py` with
+    `build_retrieval_query` helper.
+  - `TradingMemoryLog.get_past_context_semantic` + auto-bootstrap of
+    pre-existing markdown entries on first init.
+  - Env vars: `TRADINGAGENTS_RAG_ENABLED`,
+    `TRADINGAGENTS_RAG_EMBEDDING_PROVIDER`,
+    `TRADINGAGENTS_RAG_EMBEDDING_MODEL`.
+- **Parallel analysts.** When `analyst_concurrency_limit > 1` and at
+  least two analysts are selected, each analyst runs as a compiled
+  subgraph with its own `messages` channel; the parent graph fans
+  out from `START` and joins on `Bull Researcher`. Wall time during
+  the analyst phase scales roughly linearly with N because the work
+  is I/O bound. The legacy sequential wiring is preserved bit-for-bit
+  when the limit is 1 (the default).
+  - New module `tradingagents/graph/analyst_subgraph.py`.
+  - Refactor `tradingagents/graph/setup.py` with
+    `_wire_sequential` / `_wire_parallel` branches.
+  - Env var: `TRADINGAGENTS_ANALYST_CONCURRENCY`.
+
+### Documentation
+
+- New guide: `docs/rag_and_parallel.md` — architecture, config keys,
+  failure semantics, and test instructions for both upgrades.
+
 ## [0.2.5] — 2026-05-11
 
 ### Added

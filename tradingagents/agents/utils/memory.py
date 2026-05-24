@@ -1,10 +1,23 @@
-"""Append-only markdown decision log for TradingAgents."""
+"""Append-only markdown decision log for TradingAgents.
 
+Two read paths are supported:
+
+- :meth:`get_past_context` — legacy recency-based selector
+  (last N same-ticker entries + last M cross-ticker reflections).
+- :meth:`get_past_context_semantic` — embedding-similarity selector
+  backed by a Chroma vector store, opt-in via ``rag_enabled`` in
+  config. Falls back to recency on any retriever failure so the
+  trading run never breaks because of RAG infrastructure issues.
+"""
+
+import logging
 from typing import List, Optional
 from pathlib import Path
 import re
 
 from tradingagents.agents.utils.rating import parse_rating
+
+logger = logging.getLogger(__name__)
 
 
 class TradingMemoryLog:
@@ -18,6 +31,7 @@ class TradingMemoryLog:
 
     def __init__(self, config: dict = None):
         cfg = config or {}
+        self._config = cfg
         self._log_path = None
         path = cfg.get("memory_log_path")
         if path:
@@ -25,6 +39,13 @@ class TradingMemoryLog:
             self._log_path.parent.mkdir(parents=True, exist_ok=True)
         # Optional cap on resolved entries. None disables rotation.
         self._max_entries = cfg.get("memory_log_max_entries")
+        # ---- Optional RAG retriever ------------------------------
+        # Initialised lazily on first use so that
+        # ``TradingMemoryLog(config=None)`` and ``rag_enabled=False``
+        # paths do no chromadb / network work at all.
+        self._retriever = None
+        self._retriever_init_attempted = False
+        self._rag_enabled = bool(cfg.get("rag_enabled"))
 
     # --- Write path (Phase A) ---
 
@@ -48,6 +69,24 @@ class TradingMemoryLog:
         entry = f"{tag}\n\nDECISION:\n{final_trade_decision}{self._SEPARATOR}"
         with open(self._log_path, "a", encoding="utf-8") as f:
             f.write(entry)
+
+        # Mirror into the vector store when RAG is enabled. We index
+        # pending entries too — same-ticker hits are scoped by
+        # ``pending == False`` at search time so this stays inert
+        # until the entry is resolved, but it lets cross-run debug
+        # tooling inspect what's in flight.
+        retriever = self._get_retriever()
+        if retriever is not None:
+            retriever.index_entry({
+                "ticker": ticker,
+                "date": str(trade_date),
+                "rating": rating,
+                "decision": final_trade_decision,
+                "reflection": "",
+                "pending": True,
+                "raw": "pending",
+                "alpha": None,
+            })
 
     # --- Read path (Phase A) ---
 
@@ -162,6 +201,22 @@ class TradingMemoryLog:
         tmp_path.write_text(new_text, encoding="utf-8")
         tmp_path.replace(self._log_path)
 
+        # Re-index the resolved entry so semantic search now sees a
+        # ``pending == False`` document with the reflection text.
+        retriever = self._get_retriever()
+        if retriever is not None:
+            retriever.index_entry({
+                "ticker": ticker,
+                "date": str(trade_date),
+                "rating": rating,
+                "decision": rest,
+                "reflection": reflection,
+                "pending": False,
+                "raw": raw_pct,
+                "alpha": alpha_pct,
+                "holding": f"{holding_days}d",
+            })
+
     def batch_update_with_outcomes(self, updates: List[dict]) -> None:
         """Apply multiple outcome updates in a single read + atomic write.
 
@@ -178,6 +233,7 @@ class TradingMemoryLog:
         update_map = {(u["trade_date"], u["ticker"]): u for u in updates}
 
         new_blocks = []
+        resolved_for_reindex: List[dict] = []
         for block in blocks:
             stripped = block.strip()
             if not stripped:
@@ -203,6 +259,17 @@ class TradingMemoryLog:
                     new_blocks.append(
                         f"{new_tag}\n\n{rest.lstrip()}\n\nREFLECTION:\n{upd['reflection']}"
                     )
+                    resolved_for_reindex.append({
+                        "ticker": ticker,
+                        "date": str(trade_date),
+                        "rating": rating,
+                        "decision": rest,
+                        "reflection": upd["reflection"],
+                        "pending": False,
+                        "raw": raw_pct,
+                        "alpha": alpha_pct,
+                        "holding": f"{upd['holding_days']}d",
+                    })
                     del update_map[(trade_date, ticker)]
                     matched = True
                     break
@@ -215,6 +282,12 @@ class TradingMemoryLog:
         tmp_path = self._log_path.with_suffix(".tmp")
         tmp_path.write_text(new_text, encoding="utf-8")
         tmp_path.replace(self._log_path)
+
+        # Re-index every resolved entry. Done after the atomic write
+        # so a vector-store failure can't corrupt the markdown.
+        retriever = self._get_retriever()
+        if retriever is not None and resolved_for_reindex:
+            retriever.reindex(resolved_for_reindex)
 
     # --- Helpers ---
 
@@ -298,3 +371,100 @@ class TradingMemoryLog:
         text = e["decision"][:300]
         suffix = "..." if len(e["decision"]) > 300 else ""
         return f"{tag}\n{text}{suffix}"
+
+    # --- RAG / semantic retrieval ------------------------------------
+
+    def _get_retriever(self):
+        """Lazy-init the semantic retriever. Returns ``None`` when off.
+
+        Init failures (missing chromadb, missing OPENAI_API_KEY,
+        embedder import error) are logged once and the log silently
+        falls back to recency-based retrieval — RAG is a quality
+        improvement, never a hard dependency for a trading run.
+        """
+        if not self._rag_enabled:
+            return None
+        if self._retriever is not None or self._retriever_init_attempted:
+            return self._retriever
+        self._retriever_init_attempted = True
+        cfg = self._config
+        try:
+            from tradingagents.retrieval import (
+                MemoryVectorStore,
+                SemanticMemoryRetriever,
+                create_embedder,
+            )
+
+            provider = cfg.get("rag_embedding_provider", "openai")
+            model = cfg.get("rag_embedding_model", "text-embedding-3-small")
+            embedder = create_embedder(provider=provider, model=model)
+            store = MemoryVectorStore(
+                path=cfg.get("rag_vector_store_path", ":memory:"),
+                embedder=embedder,
+                embedder_name=f"{provider}:{model}",
+            )
+            self._retriever = SemanticMemoryRetriever(store)
+            # Bootstrap: if the markdown log already has entries that
+            # aren't in the vector store yet (first run after enabling
+            # RAG, or after wiping the chroma directory), back-fill
+            # them so the very first semantic query is useful.
+            self._bootstrap_index(store)
+        except Exception as exc:
+            logger.warning(
+                "RAG retriever init failed (%s) — falling back to recency-based memory.",
+                exc,
+            )
+            self._retriever = None
+        return self._retriever
+
+    def _bootstrap_index(self, store) -> None:
+        """Index any markdown entries not yet in the vector store."""
+        try:
+            existing_ids = set(store.all_ids())
+        except Exception:  # pragma: no cover - defensive
+            existing_ids = set()
+        to_index = []
+        for entry in self.load_entries():
+            entry_id = f"{entry.get('ticker', '')}:{entry.get('date', '')}"
+            if entry_id in existing_ids:
+                continue
+            to_index.append(entry)
+        if to_index and self._retriever is not None:
+            self._retriever.reindex(to_index)
+
+    def get_past_context_semantic(
+        self,
+        query: str,
+        ticker: str,
+        n_same: int = 5,
+        n_cross: int = 3,
+    ) -> str:
+        """Embedding-similarity past_context for the Portfolio Manager.
+
+        Falls back to :meth:`get_past_context` whenever the retriever
+        isn't available, so callers can switch to this method
+        unconditionally without first checking ``rag_enabled``.
+        """
+        retriever = self._get_retriever()
+        if retriever is None:
+            return self.get_past_context(ticker, n_same=n_same, n_cross=n_cross)
+        try:
+            same, cross = retriever.search(
+                query=query,
+                ticker=ticker,
+                n_same=n_same,
+                n_cross=n_cross,
+            )
+        except Exception as exc:
+            logger.warning("RAG search failed (%s) — falling back to recency.", exc)
+            return self.get_past_context(ticker, n_same=n_same, n_cross=n_cross)
+        formatted = retriever.format_context(ticker, same, cross)
+        if formatted:
+            return formatted
+        # No semantic hits yet (e.g., empty store) — recency fallback
+        # is still the best we can do.
+        return self.get_past_context(ticker, n_same=n_same, n_cross=n_cross)
+
+    @property
+    def rag_enabled(self) -> bool:
+        return self._rag_enabled
